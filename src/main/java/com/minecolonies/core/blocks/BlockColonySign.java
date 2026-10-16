@@ -118,7 +118,7 @@ public class BlockColonySign extends AbstractBlockMinecolonies<BlockColonySign> 
     public void onRemove(final BlockState currentState, final Level level, final BlockPos pos, final BlockState p_60518_, final boolean p_60519_)
     {
         BlockEntity tileEntity = level.getBlockEntity(pos);
-        if (!level.isClientSide && tileEntity instanceof TileEntityColonySign tileEntityColonySign)
+        if (!level.isClientSide && currentState.getBlock() != p_60518_.getBlock() && tileEntity instanceof TileEntityColonySign tileEntityColonySign)
         {
             final IColony colony = IColonyManager.getInstance().getColonyByDimension(tileEntityColonySign.getColonyId(), level.dimension());
             if (colony != null)
