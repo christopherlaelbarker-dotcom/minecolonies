@@ -3,6 +3,7 @@ package com.minecolonies.core.network.messages.server;
 import com.ldtteam.common.network.AbstractServerPlayMessage;
 import com.ldtteam.common.network.PlayMessageType;
 import com.minecolonies.api.colony.IColonyManager;
+import com.minecolonies.api.blocks.ModBlocks;
 import com.minecolonies.api.util.InventoryUtils;
 import com.minecolonies.api.util.MessageUtils;
 import com.minecolonies.api.util.constant.Constants;
@@ -57,18 +58,25 @@ public class PickupBlockMessage extends AbstractServerPlayMessage
         }
         final Level world = sender.level();
 
-        if (IColonyManager.getInstance().getColonyByPosFromWorld(world, pos) instanceof Colony)
+        // Only an unregistered Town Hall hut can be picked up with this packet.
+        // Never mint an item before the original block has been removed.
+        if (IColonyManager.getInstance().getColonyByPosFromWorld(world, pos) instanceof Colony
+            || world.getBlockState(pos).getBlock() != ModBlocks.blockHutTownHall
+            || !world.isInWorldBounds(pos) || !world.mayInteract(sender, pos)
+            || sender.blockPosition().distSqr(pos) > 64)
         {
             return;
         }
 
-        final ItemStack stack = new ItemStack(world.getBlockState(pos).getBlock(), 1);
-        if (InventoryUtils.addItemStackToItemHandler(new InvWrapper(sender.getInventory()), stack))
+        if (!world.destroyBlock(pos, false))
         {
-            world.destroyBlock(pos, false);
+            return;
         }
-        else
+        final ItemStack stack = new ItemStack(ModBlocks.blockHutTownHall, 1);
+        if (!InventoryUtils.addItemStackToItemHandler(new InvWrapper(sender.getInventory()), stack))
         {
+            // The block was removed, so preserve its item as a world drop.
+            InventoryUtils.spawnItemStack(world, pos.getX(), pos.getY(), pos.getZ(), stack);
             MessageUtils.format(WARNING_BUILDING_PICKUP_PLAYER_INVENTORY_FULL).sendTo(sender);
         }
 
