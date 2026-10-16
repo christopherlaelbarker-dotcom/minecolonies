@@ -8,8 +8,21 @@ Snapshot date: **2026-10-15**. Source: [ldtteam/minecolonies](https://github.com
 - Implemented parts of upstream [PR #11814](https://github.com/ldtteam/minecolonies/pull/11814): nearby building and mirrored-structure preview rotations.
 - Implemented upstream [PR #11827](https://github.com/ldtteam/minecolonies/pull/11827): dining-hall food-history deduplication, empty history handling, and operator reset command.
 - A backup of the original 1.21 branch exists at `backup/version-1.21-before-pr-fixes-2026-10-15`.
-- All other open PRs and issues remain **unverified/unimplemented** in this fork. Some target different game versions, need conflict resolution, or are drafts.
-- No Minecraft game test or successful Gradle build has yet validated these changes.
+- The other open PRs and issues remain triage work; several target different Minecraft versions, require conflict resolution, or are drafts.
+- GitHub Java 21 Gradle builds for the initial fixes and merged PR #1 passed. No in-game test has yet verified the affected gameplay cases.
+
+## Integration update — 2026-10-16
+
+The 107 issue / 37 PR counts below are the **original snapshot**, not a count of outstanding fixes in this fork. An upstream issue remaining open is not proof that its reported behavior persists in current code.
+
+- **Merged into `version/1.21`:** rotation previews (upstream #11814), dining-hall food history (upstream #11827), format specifiers (upstream #11493), miner ladder block assumptions (upstream #11573), and colony-sign safeguards (upstream issue #11849). GitHub's Java 21 build completed successfully.
+- **Fork PR #2, pending validation:** new-tree sapling exclusions (#11855) and jungle trunks with substituted azalea leaves (#11459).
+- **Fork PR #3, pending validation:** isolated waterlogged fence/wall blueprint placement from upstream #11730. Its work-order stage changes are intentionally omitted.
+- **Fork PR #4, pending validation:** retrying a different pond after repeated grounded fishing hooks (#11267).
+- **Already handled in current source, subject to gameplay confirmation:** two-serving bowl-based food recipes in `DefaultRecipeProvider` already require two bowls, consistent with the remedy proposed by issue #11323. No duplicate change was made.
+- **Deferred for compatibility or scope:** 26.2-only ports, 1.20.x-only PRs, infrastructure PRs, drafts, asset placeholders, and changes requiring migration of existing construction work orders.
+
+Do not treat a green build as proof that a reported gameplay bug is fully fixed. The individual regression reproductions must still be tested.
 
 ## 37 upstream open pull requests
 
@@ -20,21 +33,21 @@ Snapshot date: **2026-10-15**. Source: [ldtteam/minecolonies](https://github.com
 | [#11850](https://github.com/ldtteam/minecolonies/pull/11850) | `version/1.21` | No | Display startup warnings when using unsupported addons | Not integrated |
 | [#11842](https://github.com/ldtteam/minecolonies/pull/11842) | `version/main` | No | Nuanced danger traversal | Not integrated |
 | [#11837](https://github.com/ldtteam/minecolonies/pull/11837) | `version/1.21` | Yes | Auto close PR's when description doesn't match template | Not integrated |
-| [#11827](https://github.com/ldtteam/minecolonies/pull/11827) | `version/1.21` | No | Fix/food history double record | Applied code changes; pending tests |
-| [#11814](https://github.com/ldtteam/minecolonies/pull/11814) | `version/1.21` | No | Fix nearby building previews rotating differently from the goggles | Applied code changes; pending tests |
+| [#11827](https://github.com/ldtteam/minecolonies/pull/11827) | `version/1.21` | No | Fix/food history double record | Merged in fork; CI build passed, gameplay untested |
+| [#11814](https://github.com/ldtteam/minecolonies/pull/11814) | `version/1.21` | No | Fix nearby building previews rotating differently from the goggles | Merged in fork; CI build passed, gameplay untested |
 | [#11788](https://github.com/ldtteam/minecolonies/pull/11788) | `version/main` | No | Migration of claims data | Not integrated |
 | [#11766](https://github.com/ldtteam/minecolonies/pull/11766) | `release/1.21` | No | Block tier change/addition proposal from discord convos | Not integrated |
 | [#11759](https://github.com/ldtteam/minecolonies/pull/11759) | `version/main` | No | Add waiter to JEI | Not integrated |
-| [#11730](https://github.com/ldtteam/minecolonies/pull/11730) | `version/1.21` | No | Fix/water stuff | Not integrated |
+| [#11730](https://github.com/ldtteam/minecolonies/pull/11730) | `version/1.21` | No | Fix/water stuff | Blockstate/waterlogging correction in fork PR #3; stage rewrite deferred |
 | [#11718](https://github.com/ldtteam/minecolonies/pull/11718) | `version/main` | No | [ImgBot] Optimize images | Not integrated |
 | [#11706](https://github.com/ldtteam/minecolonies/pull/11706) | `version/main` | No | Reduce unnecessary complexity to equipment system refactor | Not integrated |
 | [#11702](https://github.com/ldtteam/minecolonies/pull/11702) | `version/1.21` | No | Abandoned colony improvements [1.21] | Not integrated |
 | [#11697](https://github.com/ldtteam/minecolonies/pull/11697) | `version/main` | No | Abandoned colony improvements | Not integrated |
 | [#11640](https://github.com/ldtteam/minecolonies/pull/11640) | `version/main` | No | Add optional bottom-up clearing for builders | Not integrated |
 | [#11620](https://github.com/ldtteam/minecolonies/pull/11620) | `version/1.21` | Yes | Fixes for the slot rework coming in BlockUI | Not integrated |
-| [#11573](https://github.com/ldtteam/minecolonies/pull/11573) | `version/1.21` | No | Fix/hardcoded miner ladder block 1.21 | Not integrated |
+| [#11573](https://github.com/ldtteam/minecolonies/pull/11573) | `version/1.21` | No | Fix/hardcoded miner ladder block 1.21 | Merged in fork PR #1; build passed |
 | [#11571](https://github.com/ldtteam/minecolonies/pull/11571) | `version/main` | No | fix(miner): solving #965 | Not integrated |
-| [#11493](https://github.com/ldtteam/minecolonies/pull/11493) | `version/1.21` | No | Fix format specifiers in translations [1.21] | Not integrated |
+| [#11493](https://github.com/ldtteam/minecolonies/pull/11493) | `version/1.21` | No | Fix format specifiers in translations [1.21] | Merged in fork PR #1; build passed |
 | [#11492](https://github.com/ldtteam/minecolonies/pull/11492) | `version/main` | No | Fix format specifiers in translations [1.20] | Not integrated |
 | [#11466](https://github.com/ldtteam/minecolonies/pull/11466) | `version/main` | No | Caching | Not integrated |
 | [#11339](https://github.com/ldtteam/minecolonies/pull/11339) | `version/main` | No | Fix building names in research unlocks | Not integrated |
