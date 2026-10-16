@@ -65,11 +65,6 @@ public class BuildingNetherWorker extends AbstractBuilding
     private static final String TAG_LAST_TRACKED_DAY = "last_tracked_day";
 
     /**
-     * Ticks in a Minecraft day.
-     */
-    private static final long TICKS_PER_DAY = 24000L;
-
-    /**
      * How many trips we can make per period by default
      */
     private static final int MAX_PER_PERIOD = 1;
@@ -234,61 +229,28 @@ public class BuildingNetherWorker extends AbstractBuilding
     }
 
     /**
-     * Advance the trip period only for a new world-calendar day. Unlike an
-     * elapsed-ticks threshold, this also detects time skipped by sleeping.
-     * Waking still counts when the doDaylightCycle gamerule freezes world time.
+     * Update the trip allowance using a pure, independently tested state transition.
      *
-     * @param wokeUp whether the building received the daily wake-up callback
+     * @param wokeUp whether the building received its daily wake-up callback
      */
     private void updatePeriodDays(final boolean wokeUp)
     {
         final Level world = colony.getWorld();
-        final long today = Math.floorDiv(world.getDayTime(), TICKS_PER_DAY);
+        final NetherMineDayCounter.State before = new NetherMineDayCounter.State(currentPeriodDay, currentTrips, lastTrackedDay);
+        final NetherMineDayCounter.State after = NetherMineDayCounter.update(
+            before,
+            world.getDayTime(),
+            wokeUp,
+            world.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT),
+            getPeriodDays());
 
-        if (lastTrackedDay == Long.MIN_VALUE)
+        if (!after.equals(before))
         {
-            // Compatibility with saves created before the day marker existed.
-            lastTrackedDay = today;
-            if (wokeUp)
-            {
-                advancePeriodDays(1);
-            }
-            markDirty();
-            return;
-        }
-
-        if (today > lastTrackedDay)
-        {
-            // A skipped night or time jump may advance several days at once.
-            advancePeriodDays(today - lastTrackedDay);
-            lastTrackedDay = today;
+            currentPeriodDay = after.currentPeriodDay();
+            currentTrips = after.currentTrips();
+            lastTrackedDay = after.lastTrackedDay();
             markDirty();
         }
-        else if (today < lastTrackedDay)
-        {
-            // A /time command or world rollback must not count negative days.
-            lastTrackedDay = today;
-            markDirty();
-        }
-        else if (wokeUp && !world.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT))
-        {
-            // Time is frozen, so the calendar alone cannot track work days.
-            advancePeriodDays(1);
-        }
-    }
-
-    /**
-     * Count completed days and replenish the trip allowance at each period boundary.
-     */
-    private void advancePeriodDays(final long days)
-    {
-        final long totalDays = (long) currentPeriodDay + days;
-        if (totalDays >= getPeriodDays())
-        {
-            currentTrips = 0;
-        }
-        currentPeriodDay = (int) (totalDays % getPeriodDays());
-        markDirty();
     }
 
     /**
