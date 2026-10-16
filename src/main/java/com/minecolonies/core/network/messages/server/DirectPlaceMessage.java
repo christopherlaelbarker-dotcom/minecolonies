@@ -108,6 +108,7 @@ public class DirectPlaceMessage extends AbstractServerPlayMessage
         if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)
             || blockItem.getBlock() != state.getBlock()
             || !world.isInWorldBounds(pos) || !world.mayInteract(player, pos)
+            || player.blockPosition().distSqr(pos) > 64
             || !world.getBlockState(pos).canBeReplaced() || StructurePacks.selectedPack == null)
         {
             return;
