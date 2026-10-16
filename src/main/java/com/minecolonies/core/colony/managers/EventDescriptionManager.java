@@ -74,6 +74,8 @@ public class EventDescriptionManager implements IEventDescriptionManager
     @Override
     public void deserializeNBT(@NotNull final HolderLookup.Provider provider, @NotNull final CompoundTag eventManagerNBT)
     {
+        // Deserialization replaces history. Otherwise repeated reloads append duplicates.
+        eventDescs.clear();
         final ListTag eventDescListNBT = eventManagerNBT.getList(TAG_EVENT_DESC_LIST, Tag.TAG_COMPOUND);
         for (final Tag event : eventDescListNBT)
         {

@@ -570,7 +570,7 @@ public final class BackUpHelper
                 addFileToZipWithPath(
                   minecoloniesZipDir + File.separator + getFolderForDimension(colony.getDimension().location()) + String.format(FILENAME_COLONY_DELETED, colony.getID()),
                   zos,
-                  file);
+                  fileDeleted);
             }
 
             // Save colony manager
