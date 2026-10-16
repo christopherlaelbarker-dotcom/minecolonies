@@ -59,6 +59,16 @@ public class BuildingNetherWorker extends AbstractBuilding
     private static final String TAG_CURRENT_DAY = "current_day";
 
     /**
+     * Last world time accounted for by the trip-period counter.
+     */
+    private static final String TAG_LAST_DAY_SNAPSHOT = "last_day_snapshot";
+
+    /**
+     * Ticks in a Minecraft day.
+     */
+    private static final long TICKS_PER_DAY = 24000L;
+
+    /**
      * How many trips we can make per period by default
      */
     private static final int MAX_PER_PERIOD = 1;
@@ -86,7 +96,7 @@ public class BuildingNetherWorker extends AbstractBuilding
     /**
      * ServerTime for the last 'day' snapshot, to track days when doDaylightCycle is not happening.
      */
-    private long snapTime;
+    private long snapTime = Long.MIN_VALUE;
 
     public BuildingNetherWorker(@NotNull IColony colony, BlockPos pos)
     {
@@ -138,16 +148,7 @@ public class BuildingNetherWorker extends AbstractBuilding
     public void onWakeUp()
     {
         super.onWakeUp();
-        snapTime = colony.getWorld().getDayTime();
-        if (this.currentPeriodDay < getPeriodDays())
-        {
-            this.currentPeriodDay++;
-        }
-        else
-        {
-            this.currentPeriodDay = 0;
-            this.currentTrips = 0;
-        }
+        updatePeriodDays(true);
     }
 
     @Override
@@ -163,6 +164,11 @@ public class BuildingNetherWorker extends AbstractBuilding
         {
             this.currentPeriodDay = compound.getInt(TAG_CURRENT_DAY);
         }
+
+        // Old saves have no snapshot. Initialize it at the first time check.
+        this.snapTime = compound.contains(TAG_LAST_DAY_SNAPSHOT)
+            ? compound.getLong(TAG_LAST_DAY_SNAPSHOT)
+            : Long.MIN_VALUE;
     }
 
     @Override
@@ -172,6 +178,10 @@ public class BuildingNetherWorker extends AbstractBuilding
 
         compound.putInt(TAG_CURRENT_TRIPS, this.currentTrips);
         compound.putInt(TAG_CURRENT_DAY, this.currentPeriodDay);
+        if (snapTime != Long.MIN_VALUE)
+        {
+            compound.putLong(TAG_LAST_DAY_SNAPSHOT, snapTime);
+        }
 
         return compound;
     }
@@ -217,16 +227,59 @@ public class BuildingNetherWorker extends AbstractBuilding
      */
     public boolean isReadyForTrip()
     {
-        if (snapTime == 0)
-        {
-            snapTime = colony.getWorld().getDayTime();
-        }
-        if (Math.abs(colony.getWorld().getDayTime() - snapTime) >= 24000)
-        {
-            //Make sure we're incrementing if day/night cycle isn't running. 
-            this.currentPeriodDay++;
-        }
+        updatePeriodDays(false);
         return this.currentTrips < getMaxPerPeriod();
+    }
+
+    /**
+     * Advance the trip period without counting the same in-game day more than once.
+     * Wake-up events also advance the period when daylight cycling is disabled.
+     *
+     * @param wokeUp whether a new work day was signalled by the colony
+     */
+    private void updatePeriodDays(final boolean wokeUp)
+    {
+        final long now = colony.getWorld().getDayTime();
+
+        // A world-time change backwards starts a new baseline; it is not elapsed time.
+        if (snapTime == Long.MIN_VALUE || now < snapTime)
+        {
+            snapTime = now;
+            if (wokeUp)
+            {
+                advancePeriodDays(1);
+            }
+            markDirty();
+            return;
+        }
+
+        final long elapsedDays = (now - snapTime) / TICKS_PER_DAY;
+        if (elapsedDays > 0)
+        {
+            // Retain the fractional day so multiple missed days are counted exactly once.
+            snapTime += elapsedDays * TICKS_PER_DAY;
+            advancePeriodDays(elapsedDays);
+        }
+        else if (wokeUp)
+        {
+            // Even with doDaylightCycle disabled, waking marks one new work day.
+            snapTime = now;
+            advancePeriodDays(1);
+        }
+    }
+
+    /**
+     * Count completed days and replenish the trip allowance at each period boundary.
+     */
+    private void advancePeriodDays(final long days)
+    {
+        final long totalDays = (long) currentPeriodDay + days;
+        if (totalDays >= getPeriodDays())
+        {
+            currentTrips = 0;
+        }
+        currentPeriodDay = (int) (totalDays % getPeriodDays());
+        markDirty();
     }
 
     /**
@@ -235,6 +288,7 @@ public class BuildingNetherWorker extends AbstractBuilding
     public void recordTrip()
     {
         this.currentTrips++;
+        markDirty();
     }
 
     /**
