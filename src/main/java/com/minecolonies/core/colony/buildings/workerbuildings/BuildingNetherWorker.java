@@ -24,6 +24,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.FlintAndSteelItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.NotNull;
@@ -59,6 +60,11 @@ public class BuildingNetherWorker extends AbstractBuilding
     private static final String TAG_CURRENT_DAY = "current_day";
 
     /**
+     * Last world-calendar day accounted for by the trip-period counter.
+     */
+    private static final String TAG_LAST_TRACKED_DAY = "last_tracked_day";
+
+    /**
      * How many trips we can make per period by default
      */
     private static final int MAX_PER_PERIOD = 1;
@@ -84,9 +90,10 @@ public class BuildingNetherWorker extends AbstractBuilding
     private int currentTrips = 0;
 
     /**
-     * ServerTime for the last 'day' snapshot, to track days when doDaylightCycle is not happening.
+     * Most recent absolute world-calendar day that was accounted for.
+     * A separate wake-up fallback handles worlds with daylight cycling disabled.
      */
-    private long snapTime;
+    private long lastTrackedDay = Long.MIN_VALUE;
 
     public BuildingNetherWorker(@NotNull IColony colony, BlockPos pos)
     {
@@ -138,16 +145,7 @@ public class BuildingNetherWorker extends AbstractBuilding
     public void onWakeUp()
     {
         super.onWakeUp();
-        snapTime = colony.getWorld().getDayTime();
-        if (this.currentPeriodDay < getPeriodDays())
-        {
-            this.currentPeriodDay++;
-        }
-        else
-        {
-            this.currentPeriodDay = 0;
-            this.currentTrips = 0;
-        }
+        updatePeriodDays(true);
     }
 
     @Override
@@ -163,6 +161,11 @@ public class BuildingNetherWorker extends AbstractBuilding
         {
             this.currentPeriodDay = compound.getInt(TAG_CURRENT_DAY);
         }
+
+        // Old saves have no day marker; establish one on the next check.
+        this.lastTrackedDay = compound.contains(TAG_LAST_TRACKED_DAY)
+            ? compound.getLong(TAG_LAST_TRACKED_DAY)
+            : Long.MIN_VALUE;
     }
 
     @Override
@@ -172,6 +175,10 @@ public class BuildingNetherWorker extends AbstractBuilding
 
         compound.putInt(TAG_CURRENT_TRIPS, this.currentTrips);
         compound.putInt(TAG_CURRENT_DAY, this.currentPeriodDay);
+        if (lastTrackedDay != Long.MIN_VALUE)
+        {
+            compound.putLong(TAG_LAST_TRACKED_DAY, lastTrackedDay);
+        }
 
         return compound;
     }
@@ -217,16 +224,33 @@ public class BuildingNetherWorker extends AbstractBuilding
      */
     public boolean isReadyForTrip()
     {
-        if (snapTime == 0)
-        {
-            snapTime = colony.getWorld().getDayTime();
-        }
-        if (Math.abs(colony.getWorld().getDayTime() - snapTime) >= 24000)
-        {
-            //Make sure we're incrementing if day/night cycle isn't running. 
-            this.currentPeriodDay++;
-        }
+        updatePeriodDays(false);
         return this.currentTrips < getMaxPerPeriod();
+    }
+
+    /**
+     * Update the trip allowance using a pure, independently tested state transition.
+     *
+     * @param wokeUp whether the building received its daily wake-up callback
+     */
+    private void updatePeriodDays(final boolean wokeUp)
+    {
+        final Level world = colony.getWorld();
+        final NetherMineDayCounter.State before = new NetherMineDayCounter.State(currentPeriodDay, currentTrips, lastTrackedDay);
+        final NetherMineDayCounter.State after = NetherMineDayCounter.update(
+            before,
+            world.getDayTime(),
+            wokeUp,
+            world.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT),
+            getPeriodDays());
+
+        if (!after.equals(before))
+        {
+            currentPeriodDay = after.currentPeriodDay();
+            currentTrips = after.currentTrips();
+            lastTrackedDay = after.lastTrackedDay();
+            markDirty();
+        }
     }
 
     /**
@@ -235,6 +259,7 @@ public class BuildingNetherWorker extends AbstractBuilding
     public void recordTrip()
     {
         this.currentTrips++;
+        markDirty();
     }
 
     /**

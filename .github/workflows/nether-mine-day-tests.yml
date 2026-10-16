@@ -1,0 +1,41 @@
+name: Nether Mine Day Counter Regression
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/nether-mine-day-tests.yml'
+      - 'src/main/java/com/minecolonies/core/colony/buildings/workerbuildings/BuildingNetherWorker.java'
+      - 'src/main/java/com/minecolonies/core/colony/buildings/workerbuildings/NetherMineDayCounter.java'
+      - 'src/test/java/com/minecolonies/core/colony/buildings/workerbuildings/NetherMineDayCounterTest.java'
+  push:
+    branches:
+      - version/1.21
+    paths:
+      - '.github/workflows/nether-mine-day-tests.yml'
+      - 'src/main/java/com/minecolonies/core/colony/buildings/workerbuildings/BuildingNetherWorker.java'
+      - 'src/main/java/com/minecolonies/core/colony/buildings/workerbuildings/NetherMineDayCounter.java'
+      - 'src/test/java/com/minecolonies/core/colony/buildings/workerbuildings/NetherMineDayCounterTest.java'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-period-counter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Compile and execute production period-counter regression suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/minecolonies-nether-tests"
+          javac -encoding UTF-8 -d "${RUNNER_TEMP}/minecolonies-nether-tests" \
+            src/main/java/com/minecolonies/core/colony/buildings/workerbuildings/NetherMineDayCounter.java \
+            src/test/java/com/minecolonies/core/colony/buildings/workerbuildings/NetherMineDayCounterTest.java
+          java -ea -cp "${RUNNER_TEMP}/minecolonies-nether-tests" \
+            com.minecolonies.core.colony.buildings.workerbuildings.NetherMineDayCounterTest
