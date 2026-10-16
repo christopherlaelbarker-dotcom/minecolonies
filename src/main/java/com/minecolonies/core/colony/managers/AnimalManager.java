@@ -368,7 +368,10 @@ public class AnimalManager implements IAnimalManager
     public boolean tickAnimalData(final int tickRate)
     {
         tickAnimalSnapshot.clear();
-        tickAnimalSnapshot.addAll(animalMap.values());
+        for (final IAnimalData animal : animalMap.values())
+        {
+            tickAnimalSnapshot.add(animal);
+        }
         try
         {
             for (final IAnimalData animalData : tickAnimalSnapshot)

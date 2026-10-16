@@ -572,7 +572,12 @@ public class CitizenManager implements ICitizenManager
     public boolean tickCitizenData(final int tickRate)
     {
         tickCitizenSnapshot.clear();
-        tickCitizenSnapshot.addAll(citizens.values());
+        // ArrayList.addAll(Collection) uses Collection.toArray(), allocating a
+        // population-sized temporary Object[]. Append directly instead.
+        for (final ICitizenData citizen : citizens.values())
+        {
+            tickCitizenSnapshot.add(citizen);
+        }
         try
         {
             for (final ICitizenData citizenData : tickCitizenSnapshot)
