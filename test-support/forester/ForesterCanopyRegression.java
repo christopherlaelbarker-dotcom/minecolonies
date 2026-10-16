@@ -103,6 +103,7 @@ public class ForesterCanopyRegression
     {
         final String name;
         ItemStack(String name) { this.name = name; }
+        boolean isEmpty() { return name.isEmpty(); }
     }
     static final class ItemStorage
     {
