@@ -31,9 +31,11 @@ public final class CitizenConstants
     public static final int CITIZEN_LIMIT_VILLAGE = 150;
 
     /**
-     * The limit of citizens if the last increase research is done, this is absolute limit of citizens, including config file.
+     * Maximum opt-in server-configured population after the final cap research.
+     * The default is still 250. High populations need appropriate CPU, heap,
+     * housing and simulation-distance settings; this is not a RAM guarantee.
      */
-    public static final int CITIZEN_LIMIT_MAX = 500;
+    public static final int CITIZEN_LIMIT_MAX = 2000;
 
     /**
      * Base movement speed of every citizen.
