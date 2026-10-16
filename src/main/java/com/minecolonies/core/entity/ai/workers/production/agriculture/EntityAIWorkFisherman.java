@@ -529,7 +529,11 @@ public class EntityAIWorkFisherman extends AbstractEntityAISkill<JobFisherman, B
                 {
                     stuckCounter = 0;
                     retrieveRod();
-                    return FISHERMAN_WALKING_TO_WATER;
+                    // A repeatedly grounded hook usually means an obstruction between the
+                    // fisherman and this pond (for example, a fence). Try another spot.
+                    job.removeFromPonds(job.getWater());
+                    job.setWater(null);
+                    return FISHERMAN_SEARCHING_WATER;
                 }
                 stuckCounter++;
             }
