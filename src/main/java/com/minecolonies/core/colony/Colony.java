@@ -1459,17 +1459,20 @@ public class Colony implements IColony
     @Override
     public double getOverallHappiness()
     {
-        if (citizenManager.getCitizens().size() <= 0)
+        // The public getCitizens() returns a copy. Reuse one snapshot rather
+        // than allocating three 500+-element lists for one happiness query.
+        final List<ICitizenData> citizens = citizenManager.getCitizens();
+        if (citizens.isEmpty())
         {
             return 5.5;
         }
 
         double happinessSum = 0;
-        for (final ICitizenData citizen : citizenManager.getCitizens())
+        for (final ICitizenData citizen : citizens)
         {
             happinessSum += citizen.getCitizenHappinessHandler().getHappiness(citizen.getColony(), citizen);
         }
-        return happinessSum / citizenManager.getCitizens().size();
+        return happinessSum / citizens.size();
     }
 
     /**

@@ -1,0 +1,44 @@
+name: Colony 500+ Allocation Regression
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/com/minecolonies/core/colony/managers/CitizenManager.java'
+      - 'src/main/java/com/minecolonies/core/colony/managers/AnimalManager.java'
+      - 'test-support/performance/**'
+      - '.github/workflows/colony-500-allocation-tests.yml'
+  push:
+    branches:
+      - version/1.21
+    paths:
+      - 'src/main/java/com/minecolonies/core/colony/managers/CitizenManager.java'
+      - 'src/main/java/com/minecolonies/core/colony/managers/AnimalManager.java'
+      - 'test-support/performance/**'
+      - '.github/workflows/colony-500-allocation-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  allocation-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Inject production methods into 500+ colony mocks and test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/colony-allocation"
+          python3 test-support/performance/inject_colony_allocation.py \
+            src/main/java/com/minecolonies/core/colony/managers/CitizenManager.java \
+            src/main/java/com/minecolonies/core/colony/managers/AnimalManager.java \
+            test-support/performance/ColonyAllocationRegression.java \
+            "${RUNNER_TEMP}/colony-allocation/ColonyAllocationRegression.java"
+          javac -encoding UTF-8 -d "${RUNNER_TEMP}/colony-allocation" \
+            "${RUNNER_TEMP}/colony-allocation/ColonyAllocationRegression.java"
+          java -ea -cp "${RUNNER_TEMP}/colony-allocation" ColonyAllocationRegression

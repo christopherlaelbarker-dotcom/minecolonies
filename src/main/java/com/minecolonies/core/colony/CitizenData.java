@@ -1684,13 +1684,19 @@ public class CitizenData implements ICitizenData
             inactivityTimer = DISABLED;
         }
 
-        final List<IInteractionResponseHandler> toRemove = new ArrayList<>();
+        // Most ticks invalidate no interactions. Avoid creating an empty list
+        // once per active citizen per tick (500+ lists in a large colony).
+        List<IInteractionResponseHandler> toRemove = null;
         for (final IInteractionResponseHandler handler : citizenChatOptions.values())
         {
             try
             {
                 if (!handler.isValid(this))
                 {
+                    if (toRemove == null)
+                    {
+                        toRemove = new ArrayList<>();
+                    }
                     toRemove.add(handler);
                 }
             }
@@ -1698,23 +1704,26 @@ public class CitizenData implements ICitizenData
             {
                 Log.getLogger().warn("Error during validation of handler: " + handler.getInquiry(), e);
                 // If anything goes wrong in checking validity, remove handler.
+                if (toRemove == null)
+                {
+                    toRemove = new ArrayList<>();
+                }
                 toRemove.add(handler);
             }
         }
 
-        if (!toRemove.isEmpty())
+        if (toRemove != null)
         {
             markDirty(20 * 10);
-        }
-
-        for (final IInteractionResponseHandler handler : toRemove)
-        {
-            citizenChatOptions.remove(handler.getId());
-            for (final Component comp : handler.getPossibleResponses())
+            for (final IInteractionResponseHandler handler : toRemove)
             {
-                if (citizenChatOptions.containsKey(handler.getResponseResult(comp)))
+                citizenChatOptions.remove(handler.getId());
+                for (final Component comp : handler.getPossibleResponses())
                 {
-                    citizenChatOptions.get(handler.getResponseResult(comp)).removeParent(handler.getId());
+                    if (citizenChatOptions.containsKey(handler.getResponseResult(comp)))
+                    {
+                        citizenChatOptions.get(handler.getResponseResult(comp)).removeParent(handler.getId());
+                    }
                 }
             }
         }

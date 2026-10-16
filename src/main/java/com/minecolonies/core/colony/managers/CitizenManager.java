@@ -65,6 +65,13 @@ public class CitizenManager implements ICitizenManager
     private final Map<Integer, ICitizenData> citizens = new HashMap<>();
 
     /**
+     * Reused during the frequently called citizen data tick. Updating citizen data
+     * may indirectly modify the citizen registry, so iterate a snapshot instead
+     * of the live map without allocating a new list each tick.
+     */
+    private final List<ICitizenData> tickCitizenSnapshot = new ArrayList<>();
+
+    /**
      * Variables to determine if citizens have to be updated on the client side.
      */
     private boolean isCitizensDirty = false;
@@ -564,9 +571,24 @@ public class CitizenManager implements ICitizenManager
     @Override
     public boolean tickCitizenData(final int tickRate)
     {
-        for (ICitizenData iCitizenData : this.getCitizens())
+        tickCitizenSnapshot.clear();
+        // ArrayList.addAll(Collection) uses Collection.toArray(), allocating a
+        // population-sized temporary Object[]. Append directly instead.
+        for (final ICitizenData citizen : citizens.values())
         {
-            iCitizenData.update(tickRate);
+            tickCitizenSnapshot.add(citizen);
+        }
+        try
+        {
+            for (final ICitizenData citizenData : tickCitizenSnapshot)
+            {
+                citizenData.update(tickRate);
+            }
+        }
+        finally
+        {
+            // Do not retain extra strong references to removed citizens.
+            tickCitizenSnapshot.clear();
         }
         return false;
     }
@@ -582,11 +604,18 @@ public class CitizenManager implements ICitizenManager
         if (colony.getServerBuildingManager().hasTownHall() && (citizenRespawnTimer -= 500) < 0)
         {
             citizenRespawnTimer = 5 * 60 * TICKS_SECOND;
-            getCitizens().stream().filter(Objects::nonNull).forEach(ICitizenData::updateEntityIfNecessary);
+            // This is a periodic operation; no temporary stream is required.
+            for (final ICitizenData citizen : getCitizens())
+            {
+                if (citizen != null)
+                {
+                    citizen.updateEntityIfNecessary();
+                }
+            }
         }
 
         //  Spawn initial Citizens
-        if (colony.getSettings().getSetting(BuildingTownHall.MOVE_IN).getValue() && colony.getServerBuildingManager().hasTownHall() && getCitizens().size() < MineColonies.getConfig().getServer().initialCitizenAmount.get())
+        if (colony.getSettings().getSetting(BuildingTownHall.MOVE_IN).getValue() && colony.getServerBuildingManager().hasTownHall() && citizens.size() < MineColonies.getConfig().getServer().initialCitizenAmount.get())
         {
             respawnInterval -= 500 + (SECONDS_A_MINUTE * colony.getServerBuildingManager().getTownHall().getBuildingLevel());
 
@@ -594,12 +623,12 @@ public class CitizenManager implements ICitizenManager
             {
                 respawnInterval = 60 * TICKS_SECOND;
                 int femaleCount = 0;
-                for (ICitizenData citizens : getCitizens())
+                for (final ICitizenData citizen : citizens.values())
                 {
-                    femaleCount += citizens.isFemale() ? 1 : 0;
+                    femaleCount += citizen.isFemale() ? 1 : 0;
                 }
 
-                final boolean firstCitizen = getCitizens().size() == 0;
+                final boolean firstCitizen = citizens.isEmpty();
                 final ICitizenData newCitizen = createAndRegisterCivilianData();
                 if (firstCitizen)
                 {
@@ -607,13 +636,13 @@ public class CitizenManager implements ICitizenManager
                 }
 
                 // For first citizen, give a random chance of male or female.
-                if (getCitizens().size() == 1)
+                if (citizens.size() == 1)
                 {
                     newCitizen.setGenderAndGenerateName(random.nextBoolean());
                 }
                 // Otherwise, set the new colonist's gender to whatever gender is less common.
                 // Use double division to avoid getting two male colonists in a row for the first set.
-                else if (femaleCount < (getCitizens().size() - 1) / 2.0)
+                else if (femaleCount < (citizens.size() - 1) / 2.0)
                 {
                     newCitizen.setGenderAndGenerateName(true);
                 }
@@ -654,7 +683,17 @@ public class CitizenManager implements ICitizenManager
     @Override
     public ICitizenData getRandomCitizen()
     {
-        return (ICitizenData) citizens.values().toArray()[random.nextInt(citizens.values().size())];
+        // Selecting an index through a temporary Object[] allocated one array
+        // proportional to colony population for every random citizen request.
+        int remaining = random.nextInt(citizens.size());
+        for (final ICitizenData citizen : citizens.values())
+        {
+            if (remaining-- == 0)
+            {
+                return citizen;
+            }
+        }
+        throw new IllegalStateException("Citizen registry changed during random selection");
     }
 
     @Override
