@@ -4,11 +4,18 @@ on:
   pull_request:
     paths:
       - '.github/workflows/neoforge-server-smoke.yml'
+      - 'src/main/java/com/minecolonies/core/colony/**'
+      - 'src/main/java/com/minecolonies/core/colony/managers/**'
+      - 'src/main/java/com/minecolonies/api/util/constant/CitizenConstants.java'
+      - 'src/datagen/generated/minecolonies/data/minecolonies/researches/effects/citizencapaddition.json'
   push:
     branches:
       - version/1.21
     paths:
       - '.github/workflows/neoforge-server-smoke.yml'
+      - 'src/main/java/com/minecolonies/core/colony/**'
+      - 'src/main/java/com/minecolonies/api/util/constant/CitizenConstants.java'
+      - 'src/datagen/generated/minecolonies/data/minecolonies/researches/effects/citizencapaddition.json'
   workflow_dispatch:
 
 permissions:
