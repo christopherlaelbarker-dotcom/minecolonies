@@ -2,6 +2,7 @@ package com.minecolonies.core.network.messages.server.colony.building;
 
 import com.ldtteam.common.network.PlayMessageType;
 import com.minecolonies.api.colony.IColony;
+import com.minecolonies.api.items.ModItems;
 import com.minecolonies.api.colony.buildings.views.IBuildingView;
 import com.minecolonies.api.util.InventoryUtils;
 import com.minecolonies.api.util.Utils;
@@ -53,6 +54,13 @@ public class GiveToolMessage extends AbstractBuildingServerMessage<AbstractBuild
     @Override
     protected void onExecute(final IPayloadContext ctxIn, final ServerPlayer player, final IColony colony, final AbstractBuilding building)
     {
+        // The request includes an item chosen by the client. Restrict item
+        // creation to the colony tools supported by this building GUI.
+        if (item != ModItems.scepterBeekeeper && item != ModItems.scepterLumberjack
+            && item != ModItems.scepterGuard && item != ModItems.permTool)
+        {
+            return;
+        }
         final ItemStack scepter = InventoryUtils.getOrCreateItemAndPutToHotbarAndSelectOrDrop(item, player, item::getDefaultInstance, true);
         building.writeToItemStack(scepter);
 

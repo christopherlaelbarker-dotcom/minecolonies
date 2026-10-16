@@ -3,9 +3,11 @@ package com.minecolonies.core.network.messages.server.colony;
 import com.ldtteam.common.network.PlayMessageType;
 import com.minecolonies.api.colony.IColony;
 import com.minecolonies.api.colony.IColonyManager;
+import com.minecolonies.api.colony.connections.ColonyConnection;
 import com.minecolonies.api.colony.connections.DiplomacyStatus;
 import com.minecolonies.api.colony.permissions.Action;
 import com.minecolonies.api.util.InventoryUtils;
+import com.minecolonies.api.util.BlockPosUtil;
 import com.minecolonies.api.util.MathUtils;
 import com.minecolonies.api.util.constant.Constants;
 import com.minecolonies.core.colony.buildings.workerbuildings.BuildingGateHouse;
@@ -101,49 +103,64 @@ public class TeleportToColonyMessage extends AbstractColonyServerMessage
             return;
         }
 
-        if (originColony.getPermissions().hasPermission(player, Action.TELEPORT_TO_COLONY) || colony.getPermissions().hasPermission(player, Action.TELEPORT_TO_COLONY))
+        if (!(originColony.getPermissions().hasPermission(player, Action.TELEPORT_TO_COLONY)
+            || colony.getPermissions().hasPermission(player, Action.TELEPORT_TO_COLONY)))
         {
-            final BlockEntity gateHouse = colony.getWorld().getBlockEntity(pos);
-            if (gateHouse instanceof TileEntityColonyBuilding && ((TileEntityColonyBuilding) gateHouse).getBuilding() instanceof BuildingGateHouse)
-            {
-                if (cost > 0)
-                {
-                    if (InventoryUtils.attemptReduceStackInItemHandler(new InvWrapper(player.getInventory()), new ItemStack(Items.GOLD_NUGGET), cost))
-                    {
-                        int output = cost/2;
-                        if (output <= STACKSIZE)
-                        {
-                            InventoryUtils.addItemStackToItemHandler(((TileEntityColonyBuilding) gateHouse).getInventory(), new ItemStack(Items.GOLD_NUGGET, output));
-                        }
-                        else
-                        {
-                            for (int i = 0; i < output/STACKSIZE; i++)
-                            {
-                                if (output > 0)
-                                {
-                                    final int qty = Math.min(STACKSIZE, output);
-                                    InventoryUtils.addItemStackToItemHandler(((TileEntityColonyBuilding) gateHouse).getInventory(), new ItemStack(Items.GOLD_NUGGET, qty));
-                                    output -= qty;
-                                }
-                            }
-                        }
-                    }
-                }
+            return;
+        }
 
-                final List<BlockPos> posList = ((TileEntityColonyBuilding) gateHouse).getCachedWorldTagNamePosMap().get(TAG_GATE);
-                if (posList == null || posList.isEmpty())
-                {
-                    TeleportHelper.colonyTeleport(player, colony, pos);
-                }
-                else
-                {
-                    TeleportHelper.colonyTeleport(player, colony, posList.get(MathUtils.RANDOM.nextInt(posList.size())));
-                }
-            }
-            else
+        // Do not allow callers to substitute an arbitrary gatehouse in an allied
+        // colony. Only the endpoint registered on this connection may be used.
+        ColonyConnection route = originColony.getConnectionManager().getDirectlyConnectedColonies().get(colony.getID());
+        if (route == null)
+        {
+            route = originColony.getConnectionManager().getIndirectlyConnectedColonies().get(colony.getID());
+        }
+        if (route == null || !pos.equals(route.pos))
+        {
+            return;
+        }
+
+        // Validate the client-selected endpoint against the destination colony.
+        final BlockEntity gateHouse = colony.getWorld().getBlockEntity(pos);
+        if (!(gateHouse instanceof TileEntityColonyBuilding tile)
+            || !(tile.getBuilding() instanceof BuildingGateHouse)
+            || colony.getServerBuildingManager().getBuilding(pos) != tile.getBuilding()
+            || pos.equals(BlockPos.ZERO))
+        {
+            return;
+        }
+
+        // The client only supplies a display price. Never trust a packet's
+        // price when charging or crediting items.
+        final int actualCost = originColony.getPermissions().hasPermission(player, Action.MANAGE_HUTS)
+            ? 0 : Math.max(0, (int) (BlockPosUtil.dist(originColony.getCenter(), pos) / 125));
+        if (actualCost > 0 && !InventoryUtils.attemptReduceStackInItemHandler(
+            new InvWrapper(player.getInventory()), new ItemStack(Items.GOLD_NUGGET), actualCost))
+        {
+            return;
+        }
+
+        int output = actualCost / 2;
+        while (output > 0)
+        {
+            final int quantity = Math.min(STACKSIZE, output);
+            final ItemStack payment = new ItemStack(Items.GOLD_NUGGET, quantity);
+            if (!InventoryUtils.addItemStackToItemHandler(tile.getInventory(), payment))
             {
-                TeleportHelper.colonyTeleport(player, colony, pos);
+                InventoryUtils.spawnItemStack(colony.getWorld(), pos.getX(), pos.getY(), pos.getZ(), payment);
             }
+            output -= quantity;
+        }
+
+        final List<BlockPos> posList = tile.getCachedWorldTagNamePosMap().get(TAG_GATE);
+        if (posList == null || posList.isEmpty())
+        {
+            TeleportHelper.colonyTeleport(player, colony, pos);
+        }
+        else
+        {
+            TeleportHelper.colonyTeleport(player, colony, posList.get(MathUtils.RANDOM.nextInt(posList.size())));
         }
     }
 }

@@ -106,7 +106,7 @@ public class ConnectionModuleWindow extends AbstractBuildingWindow<IBuildingView
     private void teleportToColony(@NotNull final Button button)
     {
         final ColonyConnection connectedColonyData = getColonyDataFromPane(button);
-        final int dist = (int) BlockPosUtil.dist(connectedColonyData.pos, buildingView.getPosition());
+        final int dist = (int) BlockPosUtil.dist(connectedColonyData.pos, buildingView.getColony().getCenter());
         final int itemCount = externalPlayer ? dist/125 : 0;
 
         new WindowConfirm(this,
@@ -148,7 +148,7 @@ public class ConnectionModuleWindow extends AbstractBuildingWindow<IBuildingView
                 rowPane.findPaneOfTypeByID("distance", Text.class).setText(Component.translatable("com.minecolonies.coremod.dist.blocks", (int) BlockPosUtil.dist(colonyData.pos, buildingView.getColony().getCenter())));
                 rowPane.findPaneOfTypeByID("state", Text.class).setText(Component.translatable(colonyData.diplomacyStatus.translationKey()));
 
-                final int dist = (int) BlockPosUtil.dist(colonyData.pos, buildingView.getPosition());
+                final int dist = (int) BlockPosUtil.dist(colonyData.pos, buildingView.getColony().getCenter());
                 final int itemCount = dist/125;
                 final ItemIcon itemIcon = rowPane.findPaneOfTypeByID("icon", ItemIcon.class);
                     if (externalPlayer)

@@ -20,6 +20,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -97,18 +98,45 @@ public class DirectPlaceMessage extends AbstractServerPlayMessage
     {
         final Level world = player.getCommandSenderWorld();
         final IColony colony = IColonyManager.getInstance().getColonyByPosFromWorld(world, pos);
-        InventoryUtils.reduceStackInItemHandler(new InvWrapper(player.getInventory()), stack);
-
-        if ((colony == null && state.getBlock() == ModBlocks.blockHutTownHall) || (colony != null && colony.getPermissions().hasPermission(player, Action.MANAGE_HUTS)))
+        // The packet is untrusted: check permission, target block and item *before*
+        // consuming anything or modifying the world.
+        if (!((colony == null && state.getBlock() == ModBlocks.blockHutTownHall)
+            || (colony != null && colony.getPermissions().hasPermission(player, Action.MANAGE_HUTS))))
         {
-            final ColonyId colonyId = ColonyId.readFromItemStack(stack);
-            if (colony != null && colonyId.hasColonyId() && colony.getID() != colonyId.id())
-            {
-                MessageUtils.format(WRONG_COLONY, colonyId.id()).sendTo(player);
-                return;
-            }
+            return;
+        }
+        if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem blockItem)
+            || blockItem.getBlock() != state.getBlock()
+            || !world.isInWorldBounds(pos) || !world.mayInteract(player, pos)
+            || player.blockPosition().distSqr(pos) > 64
+            || !world.getBlockState(pos).canBeReplaced() || StructurePacks.selectedPack == null)
+        {
+            return;
+        }
 
-            player.getCommandSenderWorld().setBlockAndUpdate(pos, state);
+        final ColonyId colonyId = ColonyId.readFromItemStack(stack);
+        if (colony != null && colonyId.hasColonyId() && colony.getID() != colonyId.id())
+        {
+            MessageUtils.format(WRONG_COLONY, colonyId.id()).sendTo(player);
+            return;
+        }
+
+        final InvWrapper inventory = new InvWrapper(player.getInventory());
+        if (!player.isCreative() && !InventoryUtils.attemptReduceStackInItemHandler(inventory, stack, 1))
+        {
+            return;
+        }
+        if (!world.setBlockAndUpdate(pos, state))
+        {
+            if (!player.isCreative())
+            {
+                InventoryUtils.addItemStackToItemHandler(inventory, stack.copyWithCount(1));
+            }
+            return;
+        }
+
+        // The block is now actually placed. Do not use unvalidated packet data
+        // or a missing colony while applying the deferred hut blueprint.
             if (world.getBlockEntity(pos) instanceof final TileEntityColonyBuilding hut)
             {
                 hut.setStructurePack(StructurePacks.selectedPack);
@@ -126,7 +154,7 @@ public class DirectPlaceMessage extends AbstractServerPlayMessage
                     final HutBlockData hutComponent = HutBlockData.readFromItemStack(stack);
                     if (hutComponent != null)
                     {
-                        final IBuilding building = colony.getServerBuildingManager().getBuilding(pos);
+                        final IBuilding building = colony == null ? null : colony.getServerBuildingManager().getBuilding(pos);
                         if (building != null)
                         {
                             building.setBuildingLevel(hutComponent.level());
@@ -135,6 +163,5 @@ public class DirectPlaceMessage extends AbstractServerPlayMessage
                     }
                 })));
             }
-        }
     }
 }
