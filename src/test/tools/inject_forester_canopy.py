@@ -8,7 +8,7 @@ source = Path(sys.argv[1]).read_text()
 template = Path(sys.argv[2]).read_text()
 
 def method(name):
-    found = list(re.finditer(r"private static boolean\s+" + re.escape(name) + r"\s*\(", source))
+    found = list(re.finditer(r"(?:private static|public) boolean\s+" + re.escape(name) + r"\s*\(", source))
     if len(found) != 1:
         raise RuntimeError(f"Expected exactly one production {name} method, found {len(found)}")
     start = found[0].start()
@@ -24,7 +24,8 @@ def method(name):
     raise RuntimeError("Method has no closing brace: " + name)
 
 for tag, name in (("PRODUCTION_LEAF_SCAN", "hasEnoughLeavesAndIsSupposedToCut"),
-                  ("PRODUCTION_SAPLING_CHECK", "supposedToCut")):
+                  ("PRODUCTION_SAPLING_CHECK", "supposedToCut"),
+                  ("PRODUCTION_SERVER_CANOPY_CHECK", "hasExcludedCanopySapling")):
     needle = "// " + tag
     if template.count(needle) != 1:
         raise RuntimeError("Missing unique template marker " + needle)

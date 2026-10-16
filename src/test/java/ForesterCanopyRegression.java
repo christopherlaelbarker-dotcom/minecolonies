@@ -12,6 +12,8 @@ public class ForesterCanopyRegression
     {
         final String name;
         Block(final String name) { this.name = name; }
+        @Override public boolean equals(Object obj) { return obj instanceof Block block && name.equals(block.name); }
+        @Override public int hashCode() { return name.hashCode(); }
     }
 
     static final class BlockPos
@@ -50,7 +52,7 @@ public class ForesterCanopyRegression
         Optional<Boolean> getOptionalValue(String property) { return Optional.of(persistent); }
     }
 
-    static final class LevelReader
+    static class LevelReader
     {
         final Map<BlockPos, BlockState> blocks = new HashMap<>();
         BlockState getBlockState(BlockPos pos)
@@ -65,6 +67,17 @@ public class ForesterCanopyRegression
         LevelReader persistent(int y, String name)
         {
             blocks.put(new BlockPos(-1, y, -1), new BlockState(name, true));
+            return this;
+        }
+    }
+
+    static final class Level extends LevelReader
+    {
+        final Map<String, ItemStack> drops = new HashMap<>();
+        int lootQueries;
+        Level drops(String leafName, String sapling)
+        {
+            drops.put(leafName, new ItemStack(sapling));
             return this;
         }
     }
@@ -119,9 +132,23 @@ public class ForesterCanopyRegression
     static final class Tree
     {
         static final int NUMBER_OF_LEAVES = 3;
+        BlockPos topLog = new BlockPos(0, 0, 0);
+
+        private ItemStack calcSaplingForPos(Level world, BlockPos pos, boolean checkFitsBase)
+        {
+            world.lootQueries++;
+            String leafName = world.getBlockState(pos).getBlock().name;
+            ItemStack dropped = world.drops.get(leafName);
+            if (dropped != null)
+            {
+                IColonyManager.getInstance().getCompatibilityManager().lookup.put(leafName, dropped);
+            }
+            return dropped;
+        }
 
         // PRODUCTION_LEAF_SCAN
         // PRODUCTION_SAPLING_CHECK
+        // PRODUCTION_SERVER_CANOPY_CHECK
     }
 
     static int assertions = 0;
@@ -198,6 +225,35 @@ public class ForesterCanopyRegression
         expect("once cache is populated spruce is excluded",
             passes(new LevelReader().leaf(0, "leaf-spruce").leaf(1, "leaf-spruce")
                 .leaf(2, "leaf-spruce"), "spruce_sapling"), false);
-        System.out.println("PASS: " + assertions + " Forester canopy tests using production Tree.java leaf methods");
+        cache.remove("leaf-birch");
+        Level firstMixed = new Level().drops("leaf-birch", "birch_sapling");
+        firstMixed.leaf(0, "leaf-oak").leaf(1, "leaf-birch").leaf(2, "leaf-oak");
+        expect("first uncached excluded birch in mixed canopy is detected via server loot",
+            new Tree().hasExcludedCanopySapling(firstMixed, List.of(new ItemStorage("birch_sapling"))), true);
+        if (firstMixed.lootQueries != 1)
+        {
+            throw new AssertionError("Expected exactly one server loot resolution of uncached birch");
+        }
+        assertions++;
+        expect("server side cached birch stays excluded",
+            new Tree().hasExcludedCanopySapling(firstMixed, List.of(new ItemStorage("birch_sapling"))), true);
+        cache.remove("leaf-birch");
+        Level ignoredPlaced = new Level().drops("leaf-birch", "birch_sapling");
+        ignoredPlaced.leaf(0, "leaf-oak").leaf(1, "leaf-oak")
+            .leaf(2, "leaf-oak").persistent(3, "leaf-birch");
+        expect("persistent birch does not veto an otherwise allowed natural oak canopy",
+            new Tree().hasExcludedCanopySapling(ignoredPlaced, List.of(new ItemStorage("birch_sapling"))), false);
+        if (ignoredPlaced.lootQueries != 0)
+        {
+            throw new AssertionError("Server lookup must skip manually placed leaves");
+        }
+        assertions++;
+        Level noSapling = new Level();
+        noSapling.leaf(0, "leaf-unknown");
+        expect("no resolvable sapling cannot imply a disabled species",
+            new Tree().hasExcludedCanopySapling(noSapling, List.of(new ItemStorage("birch_sapling"))), false);
+        expect("empty exclusion list short-circuits server lookups",
+            new Tree().hasExcludedCanopySapling(noSapling, List.of()), false);
+        System.out.println("PASS: " + assertions + " Forester canopy tests using production Tree.java methods");
     }
 }
