@@ -454,6 +454,18 @@ public class EntityAIWorkLumberjack extends AbstractEntityAICrafting<JobLumberja
             // Check if tree creation was successful
             if (job.getTree().isTree())
             {
+                // The asynchronous tree search cannot resolve saplings for uncached leaf types.
+                // The Tree constructor has now inspected the real loot and filled that cache,
+                // so check the hut's exclusions again before cutting the first tree of a type.
+                final ItemStack sapling = job.getTree().getSapling();
+                if (!sapling.isEmpty() && building.getModuleMatching(ItemListModule.class, m -> m.getId().equals(SAPLINGS_LIST))
+                    .getList().stream().anyMatch(excluded -> ItemStackUtils.compareItemStacksIgnoreStackSize(sapling, excluded.getItemStack())))
+                {
+                    job.setTree(null);
+                    pathResult = null;
+                    return LUMBERJACK_SEARCHING_TREE;
+                }
+
                 job.getTree().findLogs(world, building.shouldRestrict() ? null : building.getColony());
                 return LUMBERJACK_CHOP_TREE;
             }
