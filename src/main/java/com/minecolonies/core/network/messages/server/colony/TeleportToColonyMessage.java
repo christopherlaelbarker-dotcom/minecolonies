@@ -3,6 +3,7 @@ package com.minecolonies.core.network.messages.server.colony;
 import com.ldtteam.common.network.PlayMessageType;
 import com.minecolonies.api.colony.IColony;
 import com.minecolonies.api.colony.IColonyManager;
+import com.minecolonies.api.colony.connections.ColonyConnection;
 import com.minecolonies.api.colony.connections.DiplomacyStatus;
 import com.minecolonies.api.colony.permissions.Action;
 import com.minecolonies.api.util.InventoryUtils;
@@ -104,6 +105,18 @@ public class TeleportToColonyMessage extends AbstractColonyServerMessage
 
         if (!(originColony.getPermissions().hasPermission(player, Action.TELEPORT_TO_COLONY)
             || colony.getPermissions().hasPermission(player, Action.TELEPORT_TO_COLONY)))
+        {
+            return;
+        }
+
+        // Do not allow callers to substitute an arbitrary gatehouse in an allied
+        // colony. Only the endpoint registered on this connection may be used.
+        ColonyConnection route = originColony.getConnectionManager().getDirectlyConnectedColonies().get(colony.getID());
+        if (route == null)
+        {
+            route = originColony.getConnectionManager().getIndirectlyConnectedColonies().get(colony.getID());
+        }
+        if (route == null || !pos.equals(route.pos))
         {
             return;
         }
