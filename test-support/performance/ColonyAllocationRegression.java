@@ -79,12 +79,50 @@ public class ColonyAllocationRegression {
         expect(population + " animal tick survivor count",
             Arrays.stream(calls).sum() == 2 * population - 1);
     }
+    /**
+     * Standalone before/after allocation probe (not a live Minecraft benchmark).
+     * Compare the previously used ArrayList snapshot with the production method
+     * extracted into the harness. A 500-entity world fixture is not required.
+     */
+    static void allocationProbe() {
+        final java.lang.management.ThreadMXBean standardBean =
+            java.lang.management.ManagementFactory.getThreadMXBean();
+        if (!(standardBean instanceof com.sun.management.ThreadMXBean bean)
+            || !bean.isThreadAllocatedMemorySupported()) {
+            System.out.println("Allocation probe unavailable on this JVM.");
+            return;
+        }
+        bean.setThreadAllocatedMemoryEnabled(true);
+        final CitizenManager manager = new CitizenManager();
+        for (int id = 0; id < 500; id++) manager.citizens.put(id, rate -> {});
+        final Runnable oldTick = () -> {
+            for (ICitizenData c : new ArrayList<>(manager.citizens.values())) c.update(1);
+        };
+        final Runnable optimizedTick = () -> manager.tickCitizenData(1);
+        for (int i = 0; i < 3000; i++) {
+            oldTick.run();
+            optimizedTick.run();
+        }
+        final int repetitions = 2000;
+        final long threadId = Thread.currentThread().getId();
+        long start = bean.getThreadAllocatedBytes(threadId);
+        for (int i = 0; i < repetitions; i++) oldTick.run();
+        final long baselineBytes = bean.getThreadAllocatedBytes(threadId) - start;
+        start = bean.getThreadAllocatedBytes(threadId);
+        for (int i = 0; i < repetitions; i++) optimizedTick.run();
+        final long optimizedBytes = bean.getThreadAllocatedBytes(threadId) - start;
+        System.out.println("500-entity standalone allocation probe over " + repetitions
+            + " ticks: previous snapshot=" + baselineBytes
+            + " bytes, reusable production snapshot=" + optimizedBytes + " bytes.");
+        System.out.println("NOTE: JIT and JVM-specific synthetic result, not full server heap or GC.");
+    }
+
     public static void main(String[] args) {
         for (int size : new int[] {1, 25, 500, 1000, 2000}) {
             if (size > 1) checkCitizenPopulation(size);
             checkAnimals(size);
         }
         System.out.println("PASS: " + checks + " regression assertions at populations up to 2,000.");
-        System.out.println("NOTE: tests verify selection and snapshot lifecycle, not actual game RAM.");
+        allocationProbe();
     }
 }
