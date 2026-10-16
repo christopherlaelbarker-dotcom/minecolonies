@@ -135,6 +135,11 @@ public class EntityAIEatTask implements IStateAI
     private Set<Item> eatenFood = new LinkedHashSet<>();
 
     /**
+     * The food already added to the food history when the meal started, so it is not added again at the end.
+     */
+    private Item recordedFood = null;
+
+    /**
      * Instantiates this task.
      *
      * @param citizen the citizen.
@@ -223,6 +228,7 @@ public class EntityAIEatTask implements IStateAI
             if (eatenFood.isEmpty())
             {
                 foodHandler.addLastEaten(foodStack.getItem());
+                recordedFood = foodStack.getItem();
             }
             eatenFood.add(foodStack.getItem());
         }
@@ -235,12 +241,13 @@ public class EntityAIEatTask implements IStateAI
 
         for (final Item foodItem : eatenFood)
         {
-            if (foodHandler.getLastEaten() != foodItem)
+            if (foodItem != recordedFood)
             {
                 foodHandler.addLastEaten(foodItem);
             }
         }
         eatenFood.clear();
+        recordedFood = null;
         citizenData.setJustAte(true);
         return CitizenAIState.IDLE;
     }
@@ -561,6 +568,7 @@ public class EntityAIEatTask implements IStateAI
         restaurantPos = null;
         eatPos = null;
         eatenFood.clear();
+        recordedFood = null;
         restaurant = null;
     }
 }
