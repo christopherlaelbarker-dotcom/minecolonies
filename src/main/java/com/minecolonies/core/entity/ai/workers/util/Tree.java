@@ -190,6 +190,14 @@ public class Tree
             return ItemStack.EMPTY;
         }
 
+        // Some world generators put azalea leaves on vanilla jungle logs. In that case
+        // use the sapling belonging to the trunk rather than one dropped by decorative leaves.
+        final BlockState trunk = world.getBlockState(location);
+        if (trunk.is(Blocks.JUNGLE_LOG) || trunk.is(Blocks.JUNGLE_WOOD))
+        {
+            return new ItemStack(Items.JUNGLE_SAPLING);
+        }
+
         ItemStack sapling;
 
         // Try leaf directly above the tree base first
