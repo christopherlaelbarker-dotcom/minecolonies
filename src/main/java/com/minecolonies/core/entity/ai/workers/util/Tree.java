@@ -452,8 +452,8 @@ public class Tree
      */
     private static boolean hasEnoughLeavesAndIsSupposedToCut(@NotNull final LevelReader world, final BlockPos pos, final List<ItemStorage> treesToNotCut)
     {
-        boolean checkedLeaves = false;
         int leafCount = 0;
+        boolean foundDynamicLeaf = false;
         int dynamicBonusY = 0;
         final BlockState blockState = world.getBlockState(pos);
         // Additional leaf search range for dynamic trees, as we start from the baselog
@@ -472,23 +472,28 @@ public class Tree
                     final BlockState block = world.getBlockState(leafPos);
                     if (block.is(BlockTags.LEAVES) || block.is(ModTags.hugeMushroomBlocks) || block.is(BlockTags.WART_BLOCKS))
                     {
-                        if (!checkedLeaves && !supposedToCut(world, treesToNotCut, leafPos))
+                        // Player-placed leaves do not establish a naturally grown tree
+                        // and must not decide which sapling type the Forester is allowed to cut.
+                        if (block.getOptionalValue(LeavesBlock.PERSISTENT).orElse(false))
+                        {
+                            continue;
+                        }
+
+                        // Examine all nearby natural leaves, not just the first or first three:
+                        // an excluded species can occur later in a mixed canopy.
+                        if (!supposedToCut(world, treesToNotCut, leafPos))
                         {
                             return false;
                         }
-                        checkedLeaves = true;
 
                         leafCount++;
-                        // Dynamic tree growth is checked by radius instead of leafcount
-                        if (leafCount >= NUMBER_OF_LEAVES || (Compatibility.isDynamicLeaf(block.getBlock())))
-                        {
-                            return true;
-                        }
+                        foundDynamicLeaf |= Compatibility.isDynamicLeaf(block.getBlock());
                     }
                 }
             }
         }
-        return false;
+        // Dynamic tree growth is checked by radius rather than a normal leaf count.
+        return leafCount >= NUMBER_OF_LEAVES || foundDynamicLeaf;
     }
 
     /**
