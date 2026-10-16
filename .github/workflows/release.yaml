@@ -1,8 +1,6 @@
 name: Release
 
-# The previous shared publishing workflow required the original publisher's
-# configuration and failed before it could produce a downloadable mod JAR.
-# This independent workflow builds this fork and attaches its own artifacts.
+# Self-contained fork packaging; does not require external publishing secrets.
 on:
   push:
     branches:
@@ -44,8 +42,6 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           shopt -s nullglob
-          # Pick the actual mod binary: sources, documentation and test JARs
-          # are not installable Minecraft mods.
           candidates=()
           for candidate in build/libs/*.jar; do
             case "${candidate}" in
@@ -54,7 +50,7 @@ jobs:
                 ;;
             esac
             unzip -Z -1 "${candidate}" > "${RUNNER_TEMP}/minecolonies-jar-entries.txt"
-            if grep -Eq '^META-INF/(neoforge.mods.toml|mods.toml)
+            if grep -Eq '^META-INF/(neoforge.mods.toml|mods.toml)$' "${RUNNER_TEMP}/minecolonies-jar-entries.txt"; then
               candidates+=("${candidate}")
             fi
           done
@@ -94,51 +90,7 @@ jobs:
             gh release create "${TAG}" dist/*.jar dist/SHA256SUMS \
               --target "${GITHUB_SHA}" \
               --title "MineColonies 1.21.1 custom build ${SHORT_SHA}" \
-              --notes "Unofficial custom-fork MineColonies build for Minecraft 1.21.1 (NeoForge, Java 21). Built from commit ${GITHUB_SHA}. Install the normal required dependency mods separately. This release was build-tested in CI, not gameplay-tested." \
-              --prerelease
-          fi
-          gh release view "${TAG}" --json url --jq .url
- "${RUNNER_TEMP}/minecolonies-jar-entries.txt"; then
-              candidates+=("${candidate}")
-            fi
-          done
-          if (( ${#candidates[@]} != 1 )); then
-            echo "Expected exactly one NeoForge mod JAR; found ${#candidates[@]}."
-            find build/libs -maxdepth 1 -type f -name '*.jar' -print
-            exit 1
-          fi
-          cp "${candidates[0]}" dist/
-          (
-            cd dist
-            sha256sum *.jar > SHA256SUMS
-          )
-          ls -lh dist/*.jar
-          cat dist/SHA256SUMS
-
-      - name: Upload downloadable build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: MineColonies-1.21.1-${{ github.sha }}
-          path: dist/
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: Publish custom-fork GitHub prerelease
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/version/1.21'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          SHORT_SHA="${GITHUB_SHA:0:12}"
-          TAG="minecolonies-1.21.1-${SHORT_SHA}"
-          if gh release view "${TAG}" >/dev/null 2>&1; then
-            gh release upload "${TAG}" dist/*.jar dist/SHA256SUMS --clobber
-          else
-            gh release create "${TAG}" dist/*.jar dist/SHA256SUMS \
-              --target "${GITHUB_SHA}" \
-              --title "MineColonies 1.21.1 custom build ${SHORT_SHA}" \
-              --notes "Unofficial custom-fork MineColonies build for Minecraft 1.21.1 (NeoForge, Java 21). Built from commit ${GITHUB_SHA}. Install the normal required dependency mods separately. This release was build-tested in CI, not gameplay-tested." \
+              --notes "Unofficial custom-fork MineColonies build for Minecraft 1.21.1 (NeoForge, Java 21). Built from commit ${GITHUB_SHA}. Install required dependency mods separately. This release was build-tested in CI, not gameplay-tested." \
               --prerelease
           fi
           gh release view "${TAG}" --json url --jq .url
