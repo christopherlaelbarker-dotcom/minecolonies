@@ -1,0 +1,43 @@
+name: Forester Canopy Regression
+
+on:
+  pull_request:
+    paths:
+      - 'src/main/java/com/minecolonies/core/entity/ai/workers/util/Tree.java'
+      - 'src/main/java/com/minecolonies/core/entity/ai/workers/production/EntityAIWorkLumberjack.java'
+      - 'src/test/**'
+      - '.github/workflows/forester-canopy-tests.yml'
+  push:
+    branches:
+      - version/1.21
+    paths:
+      - 'src/main/java/com/minecolonies/core/entity/ai/workers/util/Tree.java'
+      - 'src/main/java/com/minecolonies/core/entity/ai/workers/production/EntityAIWorkLumberjack.java'
+      - 'src/test/**'
+      - '.github/workflows/forester-canopy-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-canopy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Extract production leaf-selection logic and run regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/forester-regression"
+          python3 src/test/tools/inject_forester_canopy.py \
+            src/main/java/com/minecolonies/core/entity/ai/workers/util/Tree.java \
+            src/test/java/ForesterCanopyRegression.java \
+            "$RUNNER_TEMP/forester-regression/ForesterCanopyRegression.java"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/forester-regression" \
+            "$RUNNER_TEMP/forester-regression/ForesterCanopyRegression.java"
+          java -ea -cp "$RUNNER_TEMP/forester-regression" ForesterCanopyRegression
