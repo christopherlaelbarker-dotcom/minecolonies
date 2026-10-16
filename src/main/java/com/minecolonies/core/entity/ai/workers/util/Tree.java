@@ -41,8 +41,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 import static com.minecolonies.api.items.ModTags.fungi;
 import static com.minecolonies.api.util.constant.NbtTagConstants.*;
@@ -188,6 +190,14 @@ public class Tree
         if (topLog == null)
         {
             return ItemStack.EMPTY;
+        }
+
+        // Some world generators put azalea leaves on vanilla jungle logs. In that case
+        // use the sapling belonging to the trunk rather than one dropped by decorative leaves.
+        final BlockState trunk = world.getBlockState(location);
+        if (trunk.is(Blocks.JUNGLE_LOG) || trunk.is(Blocks.JUNGLE_WOOD))
+        {
+            return new ItemStack(Items.JUNGLE_SAPLING);
         }
 
         ItemStack sapling;
@@ -341,6 +351,61 @@ public class Tree
     }
 
     /**
+     * Check a newly identified tree's nearby natural leaves on the server.
+     * A mixed canopy can contain an excluded leaf type even when the sapling
+     * chosen for replanting comes from a different, allowed leaf.
+     *
+     * Resolve missing sapling mappings once per leaf type using server loot,
+     * which is not available to the asynchronous pathfinding search.
+     */
+    public boolean hasExcludedCanopySapling(@NotNull final Level world, @NotNull final List<ItemStorage> exclusions)
+    {
+        if (exclusions.isEmpty())
+        {
+            return false;
+        }
+
+        final Set<Block> checkedLeafTypes = new HashSet<>();
+        final BlockState topState = world.getBlockState(topLog);
+        final int dynamicBonusY = topState.is(ModTags.mangroveTree) || Compatibility.isDynamicBlock(topState.getBlock()) ? 8 : 0;
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                for (int dy = -3; dy <= 3 + dynamicBonusY; dy++)
+                {
+                    final BlockPos leafPos = topLog.offset(dx, dy, dz);
+                    final BlockState leaf = world.getBlockState(leafPos);
+                    if (!(leaf.is(BlockTags.LEAVES) || leaf.is(ModTags.hugeMushroomBlocks) || leaf.is(BlockTags.WART_BLOCKS))
+                          || leaf.getOptionalValue(LeavesBlock.PERSISTENT).orElse(false)
+                          || !checkedLeafTypes.add(leaf.getBlock()))
+                    {
+                        continue;
+                    }
+
+                    ItemStack candidate = IColonyManager.getInstance().getCompatibilityManager().getSaplingForLeaf(leaf.getBlock());
+                    if (candidate == null)
+                    {
+                        candidate = calcSaplingForPos(world, leafPos, true);
+                    }
+
+                    if (candidate != null && !candidate.isEmpty())
+                    {
+                        for (final ItemStorage excluded : exclusions)
+                        {
+                            if (ItemStackUtils.compareItemStacksIgnoreStackSize(candidate, excluded.getItemStack()))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * For use in PathJobFindTree.
      *
      * @param world         the world.
@@ -444,8 +509,8 @@ public class Tree
      */
     private static boolean hasEnoughLeavesAndIsSupposedToCut(@NotNull final LevelReader world, final BlockPos pos, final List<ItemStorage> treesToNotCut)
     {
-        boolean checkedLeaves = false;
         int leafCount = 0;
+        boolean foundDynamicLeaf = false;
         int dynamicBonusY = 0;
         final BlockState blockState = world.getBlockState(pos);
         // Additional leaf search range for dynamic trees, as we start from the baselog
@@ -464,23 +529,28 @@ public class Tree
                     final BlockState block = world.getBlockState(leafPos);
                     if (block.is(BlockTags.LEAVES) || block.is(ModTags.hugeMushroomBlocks) || block.is(BlockTags.WART_BLOCKS))
                     {
-                        if (!checkedLeaves && !supposedToCut(world, treesToNotCut, leafPos))
+                        // Player-placed leaves do not establish a naturally grown tree
+                        // and must not decide which sapling type the Forester is allowed to cut.
+                        if (block.getOptionalValue(LeavesBlock.PERSISTENT).orElse(false))
+                        {
+                            continue;
+                        }
+
+                        // Examine all nearby natural leaves, not just the first or first three:
+                        // an excluded species can occur later in a mixed canopy.
+                        if (!supposedToCut(world, treesToNotCut, leafPos))
                         {
                             return false;
                         }
-                        checkedLeaves = true;
 
                         leafCount++;
-                        // Dynamic tree growth is checked by radius instead of leafcount
-                        if (leafCount >= NUMBER_OF_LEAVES || (Compatibility.isDynamicLeaf(block.getBlock())))
-                        {
-                            return true;
-                        }
+                        foundDynamicLeaf |= Compatibility.isDynamicLeaf(block.getBlock());
                     }
                 }
             }
         }
-        return false;
+        // Dynamic tree growth is checked by radius rather than a normal leaf count.
+        return leafCount >= NUMBER_OF_LEAVES || foundDynamicLeaf;
     }
 
     /**
