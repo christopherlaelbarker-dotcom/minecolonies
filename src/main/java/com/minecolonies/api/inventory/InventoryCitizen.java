@@ -602,6 +602,15 @@ public class InventoryCitizen implements IItemHandlerModifiable, Nameable
             this.mainInventory = NonNullList.withSize(size, ItemStackUtils.EMPTY);
         }
 
+        // Restore into an existing inventory without retaining old slot content.
+        for (int i = 0; i < mainInventory.size(); i++)
+        {
+            mainInventory.set(i, ItemStack.EMPTY);
+        }
+        for (int i = 0; i < armorInventory.size(); i++)
+        {
+            armorInventory.set(i, ItemStack.EMPTY);
+        }
         freeSlots = mainInventory.size();
 
         final ListTag nbtTagList = nbtTagCompound.getList(TAG_INVENTORY, 10);
@@ -615,8 +624,11 @@ public class InventoryCitizen implements IItemHandlerModifiable, Nameable
             {
                 if (j < this.mainInventory.size())
                 {
+                    if (this.mainInventory.get(j).isEmpty())
+                    {
+                        freeSlots--;
+                    }
                     this.mainInventory.set(j, itemstack);
-                    freeSlots--;
                 }
             }
         }

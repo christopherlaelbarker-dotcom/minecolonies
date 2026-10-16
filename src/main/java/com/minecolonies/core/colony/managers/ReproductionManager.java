@@ -77,7 +77,12 @@ public class ReproductionManager implements IReproductionManager
     {
         if ( (childCreationTimer -= MAX_TICKRATE) <= 0)
         {
-            childCreationTimer = (MIN_TIME_BEFORE_SPAWNTRY + random.nextInt(CHILD_SPAWN_INTERVAL)) * (colony.getCitizenManager().getCurrentCitizenCount() / Math.max(4, colony.getCitizenManager().getMaxCitizens()));
+            // Integer division rounded most occupancy ratios down to zero,
+            // retrying reproduction every manager tick while beds remained.
+            final double occupancy = (double) colony.getCitizenManager().getCurrentCitizenCount()
+                / Math.max(4, colony.getCitizenManager().getMaxCitizens());
+            final int interval = MIN_TIME_BEFORE_SPAWNTRY + random.nextInt(CHILD_SPAWN_INTERVAL);
+            childCreationTimer = Math.max(MIN_TIME_BEFORE_SPAWNTRY, (int) (interval * occupancy));
             trySpawnChild();
         }
     }

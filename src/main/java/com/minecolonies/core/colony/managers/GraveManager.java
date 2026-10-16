@@ -291,9 +291,14 @@ public class GraveManager implements IGraveManager
 
         if (firstValidPosition != null)
         {
-            world.setBlockAndUpdate(firstValidPosition,
-              BlockMinecoloniesGrave.getPlacementState(ModBlocks.blockGrave.defaultBlockState(), firstValidPosition));
-            final TileEntityGrave graveEntity = (TileEntityGrave) world.getBlockEntity(firstValidPosition);
+            if (!world.setBlockAndUpdate(firstValidPosition,
+                  BlockMinecoloniesGrave.getPlacementState(ModBlocks.blockGrave.defaultBlockState(), firstValidPosition))
+                || !(world.getBlockEntity(firstValidPosition) instanceof TileEntityGrave graveEntity))
+            {
+                // Failed placement must not cause a null access or lose equipment.
+                dropCitizenItems(world, pos, citizenData);
+                return null;
+            }
             if (!InventoryUtils.transferAllItemHandler(citizenData.getInventory(), graveEntity.getInventory()))
             {
                 InventoryUtils.dropItemHandler(citizenData.getInventory(), world, pos.getX(), pos.getY(), pos.getZ());
@@ -325,8 +330,24 @@ public class GraveManager implements IGraveManager
         }
         else
         {
-            InventoryUtils.dropItemHandler(citizenData.getInventory(), world, pos.getX(), pos.getY(), pos.getZ());
+            dropCitizenItems(world, pos, citizenData);
         }
         return null;
+    }
+
+    /**
+     * Preserve the citizen's main inventory and armor when a grave cannot be created.
+     */
+    private static void dropCitizenItems(final Level world, final BlockPos pos, final ICitizenData citizenData)
+    {
+        InventoryUtils.dropItemHandler(citizenData.getInventory(), world, pos.getX(), pos.getY(), pos.getZ());
+        for (final EquipmentSlot slot : EquipmentSlot.values())
+        {
+            final ItemStack equipment = citizenData.getInventory().getArmorInSlot(slot);
+            if (!equipment.isEmpty())
+            {
+                InventoryUtils.spawnItemStack(world, pos.getX(), pos.getY(), pos.getZ(), equipment);
+            }
+        }
     }
 }
