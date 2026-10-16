@@ -218,6 +218,10 @@ public class ColonyConnectionManager implements IColonyConnectionManager
     @Override
     public void tick()
     {
+        // A copy is needed because a completed path can add new pending links.
+        // Avoid allocating that copy on ordinary ticks with no pending work.
+        if (!pendingColonyConnections.isEmpty())
+        {
         for (Map.Entry<BlockPos, PendingConnectionNode> pendingConnection : new ArrayList<>(pendingColonyConnections.entrySet()))
         {
             if (pendingConnection.getValue().getCachedPathResult() == null)
@@ -337,6 +341,8 @@ public class ColonyConnectionManager implements IColonyConnectionManager
                     MessageUtils.format(COM_MINECOLONIES_CONNECTION_PATH_FAILURE, pendingConnection.getKey().toShortString(), pendingConnection.getValue().getPreviousNode().toShortString()).withPriority(MessageUtils.MessagePriority.DANGER).sendTo(colony).forManagers();
                 }
             }
+        }
+
         }
 
         // Update connections.
@@ -483,7 +489,12 @@ public class ColonyConnectionManager implements IColonyConnectionManager
      */
     private void updateConnectedColonies(final TreeMap<Integer, ColonyConnection> connectedColonies)
     {
-        // Update name in cache.
+        // Updating may remove entries, so keep the mutation-safe snapshot, but
+        // do not allocate it for empty connection maps (the common case).
+        if (connectedColonies.isEmpty())
+        {
+            return;
+        }
         for (final ColonyConnection colonyEntry : new ArrayList<>(connectedColonies.values()))
         {
             final IColony connectedColony = IColonyManager.getInstance().getColonyByDimension(colonyEntry.id, colony.getDimension());

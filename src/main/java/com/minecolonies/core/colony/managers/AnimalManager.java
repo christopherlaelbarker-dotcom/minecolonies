@@ -41,6 +41,9 @@ public class AnimalManager implements IAnimalManager
      */
     private Map<Integer, IAnimalData> animalMap = new HashMap<>();
 
+    /** Reuse one snapshot across animal ticks to avoid allocating on every update. */
+    private final List<IAnimalData> tickAnimalSnapshot = new ArrayList<>();
+
     /**
      * Whether this manager is dirty and needs re-serialize
      */
@@ -364,9 +367,18 @@ public class AnimalManager implements IAnimalManager
     @Override
     public boolean tickAnimalData(final int tickRate)
     {
-        for (IAnimalData animalData : this.getAnimals())
+        tickAnimalSnapshot.clear();
+        tickAnimalSnapshot.addAll(animalMap.values());
+        try
         {
-            animalData.update(tickRate);
+            for (final IAnimalData animalData : tickAnimalSnapshot)
+            {
+                animalData.update(tickRate);
+            }
+        }
+        finally
+        {
+            tickAnimalSnapshot.clear();
         }
         return false;
     }
