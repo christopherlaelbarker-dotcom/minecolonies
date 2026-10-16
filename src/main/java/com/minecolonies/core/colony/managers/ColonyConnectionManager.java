@@ -92,24 +92,31 @@ public class ColonyConnectionManager implements IColonyConnectionManager
     @Nullable
     private ColonyConnectionNode getClosestNodeWithOpenConnection(final BlockPos pos, final boolean logIfNull)
     {
-        int distance = Integer.MAX_VALUE;
+        double nearestDistanceSq = Double.POSITIVE_INFINITY;
         ColonyConnectionNode potentialConnection = null;
         for (final ColonyConnectionNode node : colonyConnections.values())
         {
-            // Only connect to a node with correct distance.
+            // Only connect to the closest open node within the allowed 50-block range.
             if (!node.hasNextNode())
             {
-                final int localDistance = (int) node.getPosition().distSqr(pos);
-                if (localDistance <= 50*50 && localDistance < distance)
+                final double localDistanceSq = node.getPosition().distSqr(pos);
+                if (localDistanceSq < nearestDistanceSq)
                 {
-                    distance = localDistance;
-                    potentialConnection = node;
+                    nearestDistanceSq = localDistanceSq;
+                    potentialConnection = localDistanceSq <= 50 * 50 ? node : null;
                 }
             }
         }
-        if (potentialConnection == null)
+        if (potentialConnection == null && logIfNull)
         {
-            MessageUtils.format(COM_MINECOLONIES_SIGN_TOO_FAR, distance).sendTo(this.colony).forManagers();
+            if (Double.isInfinite(nearestDistanceSq))
+            {
+                MessageUtils.format(COM_MINECOLONIES_SIGN_MISSING_LINK).sendTo(this.colony).forManagers();
+            }
+            else
+            {
+                MessageUtils.format(COM_MINECOLONIES_SIGN_TOO_FAR, (int) Math.ceil(Math.sqrt(nearestDistanceSq))).sendTo(this.colony).forManagers();
+            }
         }
         return potentialConnection;
     }
@@ -184,7 +191,11 @@ public class ColonyConnectionManager implements IColonyConnectionManager
                 MessageUtils.format(Component.translatable(COM_MINECOLONIES_SIGN_DISRUPTED, nextNode.getPosition().toShortString())).sendTo(this.colony).forManagers();
             }
         }
-        pendingColonyConnections.remove(connectionPoint);
+        final PendingConnectionNode removedPending = pendingColonyConnections.remove(connectionPoint);
+        if (colonyConnectionNode != null || removedPending != null)
+        {
+            colony.markDirty();
+        }
     }
 
     @Override
