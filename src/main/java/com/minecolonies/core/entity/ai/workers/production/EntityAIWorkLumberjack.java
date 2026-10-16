@@ -2,6 +2,7 @@ package com.minecolonies.core.entity.ai.workers.production;
 
 import com.minecolonies.api.colony.IColonyManager;
 import com.minecolonies.api.compatibility.Compatibility;
+import com.minecolonies.api.crafting.ItemStorage;
 import com.minecolonies.api.entity.ai.statemachine.AITarget;
 import com.minecolonies.api.entity.ai.statemachine.states.IAIState;
 import com.minecolonies.api.entity.citizen.VisibleCitizenStatus;
@@ -458,8 +459,9 @@ public class EntityAIWorkLumberjack extends AbstractEntityAICrafting<JobLumberja
                 // The Tree constructor has now inspected the real loot and filled that cache,
                 // so check the hut's exclusions again before cutting the first tree of a type.
                 final ItemStack sapling = job.getTree().getSapling();
-                if (!sapling.isEmpty() && building.getModuleMatching(ItemListModule.class, m -> m.getId().equals(SAPLINGS_LIST))
-                    .getList().stream().anyMatch(excluded -> ItemStackUtils.compareItemStacksIgnoreStackSize(sapling, excluded.getItemStack())))
+                final List<ItemStorage> exclusions = building.getModuleMatching(ItemListModule.class, m -> m.getId().equals(SAPLINGS_LIST)).getList();
+                if ((!sapling.isEmpty() && exclusions.stream().anyMatch(excluded -> ItemStackUtils.compareItemStacksIgnoreStackSize(sapling, excluded.getItemStack())))
+                    || job.getTree().hasExcludedCanopySapling(world, exclusions))
                 {
                     job.setTree(null);
                     pathResult = null;

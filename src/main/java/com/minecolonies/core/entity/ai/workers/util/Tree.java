@@ -41,8 +41,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 import static com.minecolonies.api.items.ModTags.fungi;
 import static com.minecolonies.api.util.constant.NbtTagConstants.*;
@@ -346,6 +348,61 @@ public class Tree
             }
         }
         return topLog.offset(0, 1, 0);
+    }
+
+    /**
+     * Check a newly identified tree's nearby natural leaves on the server.
+     * A mixed canopy can contain an excluded leaf type even when the sapling
+     * chosen for replanting comes from a different, allowed leaf.
+     *
+     * Resolve missing sapling mappings once per leaf type using server loot,
+     * which is not available to the asynchronous pathfinding search.
+     */
+    public boolean hasExcludedCanopySapling(@NotNull final Level world, @NotNull final List<ItemStorage> exclusions)
+    {
+        if (exclusions.isEmpty())
+        {
+            return false;
+        }
+
+        final Set<Block> checkedLeafTypes = new HashSet<>();
+        final BlockState topState = world.getBlockState(topLog);
+        final int dynamicBonusY = topState.is(ModTags.mangroveTree) || Compatibility.isDynamicBlock(topState.getBlock()) ? 8 : 0;
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                for (int dy = -3; dy <= 3 + dynamicBonusY; dy++)
+                {
+                    final BlockPos leafPos = topLog.offset(dx, dy, dz);
+                    final BlockState leaf = world.getBlockState(leafPos);
+                    if (!(leaf.is(BlockTags.LEAVES) || leaf.is(ModTags.hugeMushroomBlocks) || leaf.is(BlockTags.WART_BLOCKS))
+                          || leaf.getOptionalValue(LeavesBlock.PERSISTENT).orElse(false)
+                          || !checkedLeafTypes.add(leaf.getBlock()))
+                    {
+                        continue;
+                    }
+
+                    ItemStack candidate = IColonyManager.getInstance().getCompatibilityManager().getSaplingForLeaf(leaf.getBlock());
+                    if (candidate == null)
+                    {
+                        candidate = calcSaplingForPos(world, leafPos, true);
+                    }
+
+                    if (candidate != null && !candidate.isEmpty())
+                    {
+                        for (final ItemStorage excluded : exclusions)
+                        {
+                            if (ItemStackUtils.compareItemStacksIgnoreStackSize(candidate, excluded.getItemStack()))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**
