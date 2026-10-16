@@ -24,6 +24,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.FlintAndSteelItem;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import org.jetbrains.annotations.NotNull;
@@ -59,9 +60,9 @@ public class BuildingNetherWorker extends AbstractBuilding
     private static final String TAG_CURRENT_DAY = "current_day";
 
     /**
-     * Last world time accounted for by the trip-period counter.
+     * Last world-calendar day accounted for by the trip-period counter.
      */
-    private static final String TAG_LAST_DAY_SNAPSHOT = "last_day_snapshot";
+    private static final String TAG_LAST_TRACKED_DAY = "last_tracked_day";
 
     /**
      * Ticks in a Minecraft day.
@@ -94,9 +95,10 @@ public class BuildingNetherWorker extends AbstractBuilding
     private int currentTrips = 0;
 
     /**
-     * ServerTime for the last 'day' snapshot, to track days when doDaylightCycle is not happening.
+     * Most recent absolute world-calendar day that was accounted for.
+     * A separate wake-up fallback handles worlds with daylight cycling disabled.
      */
-    private long snapTime = Long.MIN_VALUE;
+    private long lastTrackedDay = Long.MIN_VALUE;
 
     public BuildingNetherWorker(@NotNull IColony colony, BlockPos pos)
     {
@@ -165,9 +167,9 @@ public class BuildingNetherWorker extends AbstractBuilding
             this.currentPeriodDay = compound.getInt(TAG_CURRENT_DAY);
         }
 
-        // Old saves have no snapshot. Initialize it at the first time check.
-        this.snapTime = compound.contains(TAG_LAST_DAY_SNAPSHOT)
-            ? compound.getLong(TAG_LAST_DAY_SNAPSHOT)
+        // Old saves have no day marker; establish one on the next check.
+        this.lastTrackedDay = compound.contains(TAG_LAST_TRACKED_DAY)
+            ? compound.getLong(TAG_LAST_TRACKED_DAY)
             : Long.MIN_VALUE;
     }
 
@@ -178,9 +180,9 @@ public class BuildingNetherWorker extends AbstractBuilding
 
         compound.putInt(TAG_CURRENT_TRIPS, this.currentTrips);
         compound.putInt(TAG_CURRENT_DAY, this.currentPeriodDay);
-        if (snapTime != Long.MIN_VALUE)
+        if (lastTrackedDay != Long.MIN_VALUE)
         {
-            compound.putLong(TAG_LAST_DAY_SNAPSHOT, snapTime);
+            compound.putLong(TAG_LAST_TRACKED_DAY, lastTrackedDay);
         }
 
         return compound;
@@ -232,19 +234,21 @@ public class BuildingNetherWorker extends AbstractBuilding
     }
 
     /**
-     * Advance the trip period without counting the same in-game day more than once.
-     * Wake-up events also advance the period when daylight cycling is disabled.
+     * Advance the trip period only for a new world-calendar day. Unlike an
+     * elapsed-ticks threshold, this also detects time skipped by sleeping.
+     * Waking still counts when the doDaylightCycle gamerule freezes world time.
      *
-     * @param wokeUp whether a new work day was signalled by the colony
+     * @param wokeUp whether the building received the daily wake-up callback
      */
     private void updatePeriodDays(final boolean wokeUp)
     {
-        final long now = colony.getWorld().getDayTime();
+        final Level world = colony.getWorld();
+        final long today = Math.floorDiv(world.getDayTime(), TICKS_PER_DAY);
 
-        // A world-time change backwards starts a new baseline; it is not elapsed time.
-        if (snapTime == Long.MIN_VALUE || now < snapTime)
+        if (lastTrackedDay == Long.MIN_VALUE)
         {
-            snapTime = now;
+            // Compatibility with saves created before the day marker existed.
+            lastTrackedDay = today;
             if (wokeUp)
             {
                 advancePeriodDays(1);
@@ -253,17 +257,22 @@ public class BuildingNetherWorker extends AbstractBuilding
             return;
         }
 
-        final long elapsedDays = (now - snapTime) / TICKS_PER_DAY;
-        if (elapsedDays > 0)
+        if (today > lastTrackedDay)
         {
-            // Retain the fractional day so multiple missed days are counted exactly once.
-            snapTime += elapsedDays * TICKS_PER_DAY;
-            advancePeriodDays(elapsedDays);
+            // A skipped night or time jump may advance several days at once.
+            advancePeriodDays(today - lastTrackedDay);
+            lastTrackedDay = today;
+            markDirty();
         }
-        else if (wokeUp)
+        else if (today < lastTrackedDay)
         {
-            // Even with doDaylightCycle disabled, waking marks one new work day.
-            snapTime = now;
+            // A /time command or world rollback must not count negative days.
+            lastTrackedDay = today;
+            markDirty();
+        }
+        else if (wokeUp && !world.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT))
+        {
+            // Time is frozen, so the calendar alone cannot track work days.
             advancePeriodDays(1);
         }
     }
