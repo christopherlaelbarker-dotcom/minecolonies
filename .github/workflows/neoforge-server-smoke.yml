@@ -6,6 +6,8 @@ on:
       - '.github/workflows/neoforge-server-smoke.yml'
       - 'src/main/java/com/minecolonies/core/colony/**'
       - 'src/main/java/com/minecolonies/core/colony/managers/**'
+      - 'src/main/java/com/minecolonies/core/entity/pathfinding/**'
+      - 'src/main/java/com/minecolonies/api/configuration/ServerConfiguration.java'
       - 'src/main/java/com/minecolonies/api/util/constant/CitizenConstants.java'
       - 'src/datagen/generated/minecolonies/data/minecolonies/researches/effects/citizencapaddition.json'
   push:
@@ -14,6 +16,8 @@ on:
     paths:
       - '.github/workflows/neoforge-server-smoke.yml'
       - 'src/main/java/com/minecolonies/core/colony/**'
+      - 'src/main/java/com/minecolonies/core/entity/pathfinding/**'
+      - 'src/main/java/com/minecolonies/api/configuration/ServerConfiguration.java'
       - 'src/main/java/com/minecolonies/api/util/constant/CitizenConstants.java'
       - 'src/datagen/generated/minecolonies/data/minecolonies/researches/effects/citizencapaddition.json'
   workflow_dispatch:

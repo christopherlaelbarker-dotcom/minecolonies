@@ -4,6 +4,7 @@ import com.minecolonies.api.util.Log;
 import com.minecolonies.core.debug.messages.DebugOutputMessage;
 import com.minecolonies.core.entity.pathfinding.PathFindingStatus;
 import com.minecolonies.core.entity.pathfinding.PathfindingUtils;
+import com.minecolonies.core.entity.pathfinding.Pathfinding;
 import com.minecolonies.core.entity.pathfinding.pathjobs.AbstractPathJob;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -343,7 +344,15 @@ public class PathResult<T extends AbstractPathJob>
     {
         if (pathCalculation != null)
         {
-            pathCalculation.cancel(true);
+            final Future<Path> cancelledCalculation = pathCalculation;
+            cancelledCalculation.cancel(true);
+            // A cancelled FutureTask may remain in the executor queue.
+            // Remove it immediately to release the associated citizen/world
+            // references instead of retaining them behind thousands of jobs.
+            if (cancelledCalculation instanceof Runnable task)
+            {
+                Pathfinding.discardQueued(task);
+            }
             pathCalculation = null;
         }
 

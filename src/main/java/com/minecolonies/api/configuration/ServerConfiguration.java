@@ -109,6 +109,9 @@ public class ServerConfiguration extends AbstractConfiguration
     public final IntValue minimumRailsToPath;
     public final DoubleValue pathNodeLimitMultiplier;
 
+    /** 0 = CPU-aware auto, otherwise 1..8 dedicated pathfinding workers. */
+    public final IntValue pathfindingThreads;
+
     /*  --------------------------------------------------------------------------------- *
      *  ------------------- ######## Request System Settings ######## ------------------- *
      *  --------------------------------------------------------------------------------- */
@@ -199,6 +202,10 @@ public class ServerConfiguration extends AbstractConfiguration
         blueprintBuildMode = defineBoolean("blueprintbuildmode", false);
 
         pathNodeLimitMultiplier = defineDouble("pathNodeLimitMultiplier", 1, 1, 4);
+        // Four logical processors (e.g. an i5-4590) use one worker by default;
+        // modern high-core CPUs can use several without monopolizing the CPU.
+        // Changing this value requires a server restart.
+        pathfindingThreads = defineInteger("pathfindingthreads", 0, 0, 8);
         minimumRailsToPath = defineInteger("minimumrailstopath", 8, 5, 100);
 
         swapToCategory("requestSystem");
