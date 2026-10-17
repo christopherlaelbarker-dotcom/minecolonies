@@ -1,6 +1,7 @@
 package com.minecolonies.core.entity.pathfinding;
 
 import com.minecolonies.api.util.Log;
+import com.minecolonies.core.MineColonies;
 import com.minecolonies.core.entity.pathfinding.pathjobs.AbstractPathJob;
 import org.jetbrains.annotations.NotNull;
 
@@ -15,7 +16,11 @@ import java.util.concurrent.TimeUnit;
 public final class Pathfinding
 {
     private static final ArrayBlockingQueue<Runnable> jobQueue = new ArrayBlockingQueue<>(10000, false);
-    private static       ThreadPoolExecutor           executor;
+    /**
+     * Lazily initialized executor. The thread count is intentionally fixed until
+     * a server restart to avoid changing active path calculations mid-flight.
+     */
+    private static volatile ThreadPoolExecutor executor;
 
     /**
      * Minecolonies specific thread factory.
@@ -45,11 +50,42 @@ public final class Pathfinding
      */
     public static ThreadPoolExecutor getExecutor()
     {
-        if (executor == null)
+        ThreadPoolExecutor current = executor;
+        if (current == null)
         {
-            executor = new ThreadPoolExecutor(1, 1, 10, TimeUnit.SECONDS, jobQueue, new MinecoloniesThreadFactory());
+            synchronized (Pathfinding.class)
+            {
+                current = executor;
+                if (current == null)
+                {
+                    final int configuredWorkers = MineColonies.getConfig().getServer().pathfindingThreads.get();
+                    final int workers = PathfindingThreadPolicy.chooseWorkers(
+                        Runtime.getRuntime().availableProcessors(), configuredWorkers);
+                    current = new ThreadPoolExecutor(workers, workers, 10, TimeUnit.SECONDS,
+                        jobQueue, new MinecoloniesThreadFactory());
+                    executor = current;
+                    Log.getLogger().info("MineColonies pathfinding starting with {} workers (available processors: {}, configured: {}).",
+                        workers, Runtime.getRuntime().availableProcessors(), configuredWorkers);
+                }
+            }
         }
-        return executor;
+        return current;
+    }
+
+    /**
+     * Discard a cancelled task which has not started yet. Keeping cancelled
+     * FutureTasks in the queue can otherwise hold citizens, chunks and path
+     * search data alive until the worker reaches them.
+     *
+     * @param task cancelled FutureTask submitted to the pathfinding executor.
+     */
+    public static void discardQueued(@NotNull final Runnable task)
+    {
+        final ThreadPoolExecutor current = executor;
+        if (current != null)
+        {
+            current.remove(task);
+        }
     }
 
     /**
